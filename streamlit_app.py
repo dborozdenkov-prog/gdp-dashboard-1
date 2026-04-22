@@ -145,7 +145,9 @@ with tab2:
     else:
         # Display FX prices over time
         st.header('FX Prices Over Time', divider='gray')
-        st.line_chart(fx_df)
+        fig_fx = px.line(fx_df, x=fx_df.index, y=fx_pair, title=f'{fx_pair} Prices Over Time')
+        fig_fx.update_layout(height=400, xaxis_title='Date', yaxis_title='Price')
+        st.plotly_chart(fig_fx)
 
         # Fourier Transform Analysis
         st.header('Fourier Transform Analysis', divider='gray')
@@ -158,9 +160,15 @@ with tab2:
         magnitude = np.abs(fft)
 
         # Plot power spectrum (positive frequencies only)
-        positive_freqs = freqs[:len(freqs)//2]
-        positive_magnitude = magnitude[:len(magnitude)//2]
-        fig = px.line(x=positive_freqs, y=positive_magnitude, title='Power Spectrum')
+        positive_freqs = freqs[:len(freqs)//2 + 1]
+        positive_magnitude = magnitude[:len(magnitude)//2 + 1]
+        power_spectrum_df = pd.DataFrame({
+            'Frequency': positive_freqs,
+            'Magnitude': positive_magnitude
+        })
+        fig = px.line(power_spectrum_df, x='Frequency', y='Magnitude', title='Power Spectrum')
+        fig.update_yaxes(type="log")
+        fig.update_layout(height=400, xaxis_title='Frequency (cycles per hour)', yaxis_title='Magnitude (log scale)')
         st.plotly_chart(fig)
 
         # Denoise by filtering out high-frequency components
@@ -179,4 +187,7 @@ with tab2:
 
         # Display smoothed prices chart
         st.subheader('Smoothed Prices (Denoised via FFT)')
-        st.line_chart(pd.Series(smoothed_prices, index=fx_df.index))
+        smoothed_df = pd.DataFrame({'Smoothed Price': smoothed_prices}, index=fx_df.index)
+        fig_smoothed = px.line(smoothed_df, x=smoothed_df.index, y='Smoothed Price', title='Smoothed Prices')
+        fig_smoothed.update_layout(height=400, xaxis_title='Date', yaxis_title='Smoothed Price')
+        st.plotly_chart(fig_smoothed)
