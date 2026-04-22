@@ -34,7 +34,7 @@ def get_stock_data(tickers, start_date, end_date):
 
 # Set the title that appears at the top of the page.
 '''
-# 📈 Tesla and BYD Stock Analytics
+# 📈 Stock Analytics Dashboard
 
 Real-time stock price data from Yahoo Finance with correlation analysis.
 '''
@@ -43,18 +43,31 @@ Real-time stock price data from Yahoo Finance with correlation analysis.
 ''
 ''
 
+# Stock ticker inputs
+col1, col2 = st.columns(2)
+with col1:
+    ticker1 = st.text_input('First Stock Ticker', 'TSLA')
+with col2:
+    ticker2 = st.text_input('Second Stock Ticker', 'BYD')
+
+tickers = [ticker1.upper(), ticker2.upper()]
+
+if not ticker1 or not ticker2:
+    st.error("Please enter both stock tickers.")
+    st.stop()
+elif ticker1.upper() == ticker2.upper():
+    st.error("Please enter two different stock tickers.")
+    st.stop()
+
 # Date range selector
 end_date = datetime.now().date()
 start_date = end_date - timedelta(days=365)  # Default to last year
 
-col1, col2 = st.columns(2)
-with col1:
+col3, col4 = st.columns(2)
+with col3:
     start_date = st.date_input('Start Date', start_date)
-with col2:
+with col4:
     end_date = st.date_input('End Date', end_date)
-
-# Fetch data
-tickers = ['TSLA', 'BYD']
 stock_df = get_stock_data(tickers, start_date, end_date)
 
 if stock_df.empty:
@@ -71,20 +84,20 @@ else:
     st.header('Correlation Analysis', divider='gray')
 
     # Correlation coefficient
-    correlation = returns_df['TSLA'].corr(returns_df['BYD'])
-    st.metric(label="Correlation Coefficient (Daily Returns)", value=f"{correlation:.3f}")
+    correlation = returns_df[ticker1.upper()].corr(returns_df[ticker2.upper()])
+    st.metric(label=f"Correlation Coefficient (Daily Returns) - {ticker1.upper()} vs {ticker2.upper()}", value=f"{correlation:.3f}")
 
     # Scatter plot of returns
-    st.subheader('Scatter Plot of Daily Returns')
-    fig = px.scatter(returns_df, x='TSLA', y='BYD', 
-                     title='Tesla vs BYD Daily Returns',
-                     labels={'TSLA': 'Tesla Daily Return', 'BYD': 'BYD Daily Return'})
-    fig.add_trace(go.Scatter(x=[returns_df['TSLA'].min(), returns_df['TSLA'].max()], 
-                             y=[returns_df['TSLA'].min(), returns_df['TSLA'].max()], 
+    st.subheader(f'Scatter Plot of Daily Returns: {ticker1.upper()} vs {ticker2.upper()}')
+    fig = px.scatter(returns_df, x=ticker1.upper(), y=ticker2.upper(), 
+                     title=f'{ticker1.upper()} vs {ticker2.upper()} Daily Returns',
+                     labels={ticker1.upper(): f'{ticker1.upper()} Daily Return', ticker2.upper(): f'{ticker2.upper()} Daily Return'})
+    fig.add_trace(go.Scatter(x=[returns_df[ticker1.upper()].min(), returns_df[ticker1.upper()].max()], 
+                             y=[returns_df[ticker1.upper()].min(), returns_df[ticker1.upper()].max()], 
                              mode='lines', name='45° Line', line=dict(dash='dash')))
     st.plotly_chart(fig)
 
     # Rolling correlation
-    st.subheader('Rolling Correlation (30-day window)')
-    rolling_corr = returns_df['TSLA'].rolling(window=30).corr(returns_df['BYD'])
+    st.subheader(f'Rolling Correlation (30-day window): {ticker1.upper()} vs {ticker2.upper()}')
+    rolling_corr = returns_df[ticker1.upper()].rolling(window=30).corr(returns_df[ticker2.upper()])
     st.line_chart(rolling_corr)
