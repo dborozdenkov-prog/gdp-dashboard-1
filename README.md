@@ -2,7 +2,7 @@
 
 A simple Streamlit appstock related analytics
 
-[![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://gdp-dashboard-template.streamlit.app/)
+[![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://gdp-dashboard-1-template.streamlit.app/)
 
 ### How to run it on your own machine
 
