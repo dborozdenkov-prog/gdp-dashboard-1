@@ -58,9 +58,27 @@ def get_bond_prices_finnhub(isins, start_date, end_date, api_key):
     data = {}
     failed_isins = []
     
-    # Convert dates to Unix timestamps
-    start_ts = int(start_date.timestamp())
-    end_ts = int(end_date.timestamp())
+    # Convert dates to Unix timestamps (handle both date and datetime objects)
+    # If it's a date object without time, combine with time components
+    try:
+        if hasattr(start_date, 'timestamp'):
+            start_ts = int(start_date.timestamp())
+        else:
+            # It's a date object, convert to datetime first
+            start_dt = datetime.combine(start_date, datetime.min.time())
+            start_ts = int(start_dt.timestamp())
+    except:
+        start_ts = 0
+    
+    try:
+        if hasattr(end_date, 'timestamp'):
+            end_ts = int(end_date.timestamp())
+        else:
+            # It's a date object, convert to datetime first
+            end_dt = datetime.combine(end_date, datetime.max.time())
+            end_ts = int(end_dt.timestamp())
+    except:
+        end_ts = 0
     
     for isin in isins:
         try:
