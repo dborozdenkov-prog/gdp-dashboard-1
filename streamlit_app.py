@@ -49,7 +49,7 @@ def get_fx_data(tickers, start_date, end_date):
 
 # Set the title that appears at the top of the page.
 '''
-# 📈 Financial Analytics Dashboard
+# 📈 Signal Analytics Dashboard
 
 Stock and FX analysis with correlation and Fourier Transform.
 '''
