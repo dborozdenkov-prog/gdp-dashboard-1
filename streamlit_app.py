@@ -8,7 +8,7 @@ import numpy as np
 
 # Set the title and favicon that appear in the Browser's tab bar.
 st.set_page_config(
-    page_title='Financial Analytics Dashboard',
+    page_title='Signal Analytics Dashboard',
     page_icon='📈',  # Stock chart emoji
 )
 
@@ -122,8 +122,12 @@ with tab1:
         st.line_chart(rolling_corr)
 
 with tab2:
-    # FX pair input
-    fx_pair = st.text_input('FX Pair', 'EURUSD=X')
+    # FX pair input with G10 currency pairs
+    g10_pairs = [
+        'EURUSD=X', 'GBPUSD=X', 'USDJPY=X', 'USDCHF=X', 'AUDUSD=X',
+        'NZDUSD=X', 'USDCAD=X', 'EURGBP=X', 'EURJPY=X', 'GBPJPY=X'
+    ]
+    fx_pair = st.selectbox('Select FX Pair (G10)', g10_pairs, index=0)
 
     if not fx_pair:
         st.error("Please enter an FX pair.")
@@ -159,14 +163,14 @@ with tab2:
         freqs = np.fft.fftfreq(len(prices), d=1)  # d=1 for hourly data
         magnitude = np.abs(fft)
 
-        # Plot power spectrum (positive frequencies only)
+        # Plot Magnitude spectrum (positive frequencies only)
         positive_freqs = freqs[:len(freqs)//2 + 1]
         positive_magnitude = magnitude[:len(magnitude)//2 + 1]
         power_spectrum_df = pd.DataFrame({
             'Frequency': positive_freqs,
             'Magnitude': positive_magnitude
         })
-        fig = px.line(power_spectrum_df, x='Frequency', y='Magnitude', title='Power Spectrum')
+        fig = px.line(power_spectrum_df, x='Frequency', y='Magnitude', title='Magnitude Spectrum')
         fig.update_yaxes(type="log")
         fig.update_layout(height=400, xaxis_title='Frequency (cycles per hour)', yaxis_title='Magnitude (log scale)')
         st.plotly_chart(fig)
@@ -177,17 +181,23 @@ with tab2:
         fft_filtered[magnitude < threshold] = 0
         smoothed_prices = np.fft.ifft(fft_filtered).real
 
-        # Predict next hour price using linear extrapolation on the last 24 smoothed prices
-        last_points = smoothed_prices[-24:]
-        x = np.arange(len(last_points))
-        slope, intercept = np.polyfit(x, last_points, 1)
-        next_price = slope * len(last_points) + intercept
-
-        st.metric(label=f"Predicted Next Hour Price for {fx_pair}", value=f"{next_price:.4f}")
-
         # Display smoothed prices chart
         st.subheader('Smoothed Prices (Denoised via FFT)')
         smoothed_df = pd.DataFrame({'Smoothed Price': smoothed_prices}, index=fx_df.index)
         fig_smoothed = px.line(smoothed_df, x=smoothed_df.index, y='Smoothed Price', title='Smoothed Prices')
         fig_smoothed.update_layout(height=400, xaxis_title='Date', yaxis_title='Smoothed Price')
         st.plotly_chart(fig_smoothed)
+
+        # Predict next hour price using linear extrapolation on the last 24 smoothed prices
+        last_points = smoothed_prices[-24:]
+        x = np.arange(len(last_points))
+        slope, intercept = np.polyfit(x, last_points, 1)
+        next_price = slope * len(last_points) + intercept
+
+        # Display predicted and current price side by side
+        col_pred, col_live = st.columns(2)
+        with col_pred:
+            st.metric(label=f"Predicted Next Hour Price for {fx_pair}", value=f"{next_price:.4f}")
+        with col_live:
+            current_price = prices[-1]
+            st.metric(label=f"Current Live Price for {fx_pair}", value=f"{current_price:.4f}")
