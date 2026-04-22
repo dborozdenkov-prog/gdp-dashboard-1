@@ -163,18 +163,6 @@ with tab2:
         freqs = np.fft.fftfreq(len(prices), d=1)  # d=1 for hourly data
         magnitude = np.abs(fft)
 
-        # Plot Magnitude spectrum (positive frequencies only)
-        positive_freqs = freqs[:len(freqs)//2 + 1]
-        positive_magnitude = magnitude[:len(magnitude)//2 + 1]
-        power_spectrum_df = pd.DataFrame({
-            'Frequency': positive_freqs,
-            'Magnitude': positive_magnitude
-        })
-        fig = px.line(power_spectrum_df, x='Frequency', y='Magnitude', title='Magnitude Spectrum')
-        fig.update_yaxes(type="log")
-        fig.update_layout(height=400, xaxis_title='Frequency (cycles per hour)', yaxis_title='Magnitude (log scale)')
-        st.plotly_chart(fig)
-
         # Denoise by filtering out high-frequency components
         threshold = np.percentile(magnitude, 90)  # Retain top 10% of components
         fft_filtered = fft.copy()
@@ -193,6 +181,18 @@ with tab2:
         x = np.arange(len(last_points))
         slope, intercept = np.polyfit(x, last_points, 1)
         next_price = slope * len(last_points) + intercept
+
+        # Plot Magnitude spectrum (positive frequencies only)
+        positive_freqs = freqs[:len(freqs)//2 + 1]
+        positive_magnitude = magnitude[:len(magnitude)//2 + 1]
+        power_spectrum_df = pd.DataFrame({
+            'Frequency': positive_freqs,
+            'Magnitude': positive_magnitude
+        })
+        fig = px.line(power_spectrum_df, x='Frequency', y='Magnitude', title='Magnitude Spectrum')
+        fig.update_yaxes(type="log")
+        fig.update_layout(height=400, xaxis_title='Frequency (cycles per hour)', yaxis_title='Magnitude (log scale)')
+        st.plotly_chart(fig)
 
         # Display predicted and current price side by side
         col_pred, col_live = st.columns(2)
