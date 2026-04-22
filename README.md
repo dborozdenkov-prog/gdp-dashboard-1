@@ -1,4 +1,4 @@
-# :earth_americas: GDP dashboard template
+# :earth_americas: Signal Radio template
 
 A simple Streamlit appstock related analytics
 
