@@ -1,151 +1,90 @@
 import streamlit as st
 import pandas as pd
-import math
-from pathlib import Path
+import yfinance as yf
+from datetime import datetime, timedelta
+import plotly.express as px
+import plotly.graph_objects as go
 
 # Set the title and favicon that appear in the Browser's tab bar.
 st.set_page_config(
-    page_title='GDP dashboard',
-    page_icon=':earth_americas:', # This is an emoji shortcode. Could be a URL too.
+    page_title='Stock Analytics Dashboard',
+    page_icon='📈',  # Stock chart emoji
 )
 
 # -----------------------------------------------------------------------------
 # Declare some useful functions.
 
 @st.cache_data
-def get_gdp_data():
-    """Grab GDP data from a CSV file.
+def get_stock_data(tickers, start_date, end_date):
+    """Grab stock data from Yahoo Finance.
 
-    This uses caching to avoid having to read the file every time. If we were
-    reading from an HTTP endpoint instead of a file, it's a good idea to set
-    a maximum age to the cache with the TTL argument: @st.cache_data(ttl='1d')
+    This uses caching to avoid having to fetch data every time.
     """
-
-    # Instead of a CSV on disk, you could read from an HTTP endpoint here too.
-    DATA_FILENAME = Path(__file__).parent/'data/gdp_data.csv'
-    raw_gdp_df = pd.read_csv(DATA_FILENAME)
-
-    MIN_YEAR = 1960
-    MAX_YEAR = 2022
-
-    # The data above has columns like:
-    # - Country Name
-    # - Country Code
-    # - [Stuff I don't care about]
-    # - GDP for 1960
-    # - GDP for 1961
-    # - GDP for 1962
-    # - ...
-    # - GDP for 2022
-    #
-    # ...but I want this instead:
-    # - Country Name
-    # - Country Code
-    # - Year
-    # - GDP
-    #
-    # So let's pivot all those year-columns into two: Year and GDP
-    gdp_df = raw_gdp_df.melt(
-        ['Country Code'],
-        [str(x) for x in range(MIN_YEAR, MAX_YEAR + 1)],
-        'Year',
-        'GDP',
-    )
-
-    # Convert years from string to integers
-    gdp_df['Year'] = pd.to_numeric(gdp_df['Year'])
-
-    return gdp_df
-
-gdp_df = get_gdp_data()
+    data = {}
+    for ticker in tickers:
+        stock = yf.Ticker(ticker)
+        hist = stock.history(start=start_date, end=end_date)
+        data[ticker] = hist['Close']
+    df = pd.DataFrame(data)
+    df.index = df.index.date  # Convert to date for easier handling
+    return df
 
 # -----------------------------------------------------------------------------
 # Draw the actual page
 
 # Set the title that appears at the top of the page.
 '''
-# :earth_americas: GDP dashboard
+# 📈 Tesla and BYD Stock Analytics
 
-Browse GDP data from the [World Bank Open Data](https://data.worldbank.org/) website. As you'll
-notice, the data only goes to 2022 right now, and datapoints for certain years are often missing.
-But it's otherwise a great (and did I mention _free_?) source of data.
+Real-time stock price data from Yahoo Finance with correlation analysis.
 '''
 
 # Add some spacing
 ''
 ''
 
-min_value = gdp_df['Year'].min()
-max_value = gdp_df['Year'].max()
+# Date range selector
+end_date = datetime.now().date()
+start_date = end_date - timedelta(days=365)  # Default to last year
 
-from_year, to_year = st.slider(
-    'Which years are you interested in?',
-    min_value=min_value,
-    max_value=max_value,
-    value=[min_value, max_value])
+col1, col2 = st.columns(2)
+with col1:
+    start_date = st.date_input('Start Date', start_date)
+with col2:
+    end_date = st.date_input('End Date', end_date)
 
-countries = gdp_df['Country Code'].unique()
+# Fetch data
+tickers = ['TSLA', 'BYD']
+stock_df = get_stock_data(tickers, start_date, end_date)
 
-if not len(countries):
-    st.warning("Select at least one country")
+if stock_df.empty:
+    st.error("No data available for the selected date range.")
+else:
+    # Display stock prices over time
+    st.header('Stock Prices Over Time', divider='gray')
+    st.line_chart(stock_df)
 
-selected_countries = st.multiselect(
-    'Which countries would you like to view?',
-    countries,
-    ['DEU', 'FRA', 'GBR', 'BRA', 'MEX', 'JPN'])
+    # Calculate daily returns
+    returns_df = stock_df.pct_change().dropna()
 
-''
-''
-''
+    # Correlation analysis
+    st.header('Correlation Analysis', divider='gray')
 
-# Filter the data
-filtered_gdp_df = gdp_df[
-    (gdp_df['Country Code'].isin(selected_countries))
-    & (gdp_df['Year'] <= to_year)
-    & (from_year <= gdp_df['Year'])
-]
+    # Correlation coefficient
+    correlation = returns_df['TSLA'].corr(returns_df['BYD'])
+    st.metric(label="Correlation Coefficient (Daily Returns)", value=f"{correlation:.3f}")
 
-st.header('GDP over time', divider='gray')
+    # Scatter plot of returns
+    st.subheader('Scatter Plot of Daily Returns')
+    fig = px.scatter(returns_df, x='TSLA', y='BYD', 
+                     title='Tesla vs BYD Daily Returns',
+                     labels={'TSLA': 'Tesla Daily Return', 'BYD': 'BYD Daily Return'})
+    fig.add_trace(go.Scatter(x=[returns_df['TSLA'].min(), returns_df['TSLA'].max()], 
+                             y=[returns_df['TSLA'].min(), returns_df['TSLA'].max()], 
+                             mode='lines', name='45° Line', line=dict(dash='dash')))
+    st.plotly_chart(fig)
 
-''
-
-st.line_chart(
-    filtered_gdp_df,
-    x='Year',
-    y='GDP',
-    color='Country Code',
-)
-
-''
-''
-
-
-first_year = gdp_df[gdp_df['Year'] == from_year]
-last_year = gdp_df[gdp_df['Year'] == to_year]
-
-st.header(f'GDP in {to_year}', divider='gray')
-
-''
-
-cols = st.columns(4)
-
-for i, country in enumerate(selected_countries):
-    col = cols[i % len(cols)]
-
-    with col:
-        first_gdp = first_year[first_year['Country Code'] == country]['GDP'].iat[0] / 1000000000
-        last_gdp = last_year[last_year['Country Code'] == country]['GDP'].iat[0] / 1000000000
-
-        if math.isnan(first_gdp):
-            growth = 'n/a'
-            delta_color = 'off'
-        else:
-            growth = f'{last_gdp / first_gdp:,.2f}x'
-            delta_color = 'normal'
-
-        st.metric(
-            label=f'{country} GDP',
-            value=f'{last_gdp:,.0f}B',
-            delta=growth,
-            delta_color=delta_color
-        )
+    # Rolling correlation
+    st.subheader('Rolling Correlation (30-day window)')
+    rolling_corr = returns_df['TSLA'].rolling(window=30).corr(returns_df['BYD'])
+    st.line_chart(rolling_corr)
