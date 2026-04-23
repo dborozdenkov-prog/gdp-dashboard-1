@@ -17,7 +17,7 @@ st.set_page_config(
 # -----------------------------------------------------------------------------
 # Declare some useful functions.
 
-@st.cache_data
+@st.cache_data(ttl=300)
 def get_stock_data(tickers, start_date, end_date):
     """Grab stock data from Yahoo Finance.
 
@@ -32,7 +32,7 @@ def get_stock_data(tickers, start_date, end_date):
     df.index = df.index.date  # Convert to date for easier handling
     return df
 
-@st.cache_data
+@st.cache_data(ttl=60)
 def get_fx_data(tickers, start_date, end_date):
     """Grab FX data from Yahoo Finance.
 
@@ -217,6 +217,12 @@ Stock and FX analysis with correlation and Fourier Transform.
 tab1, tab2, tab3 = st.tabs(["Stock Analytics", "FX Analytics", "Bond PCA Analysis"])
 
 with tab1:
+    # Refresh button
+    if st.button('🔄 Refresh Stock Data', key='stock_refresh'):
+        st.rerun()
+    
+    st.divider()
+    
     # Stock ticker inputs
     col1, col2 = st.columns(2)
     with col1:
@@ -277,6 +283,12 @@ with tab1:
         st.line_chart(rolling_corr)
 
 with tab2:
+    # Refresh button
+    if st.button('🔄 Refresh FX Data', key='fx_refresh'):
+        st.rerun()
+    
+    st.divider()
+    
     # FX pair input with G10 currency pairs
     g10_pairs = [
         'EURUSD=X', 'GBPUSD=X', 'USDJPY=X', 'USDCHF=X', 'AUDUSD=X',
