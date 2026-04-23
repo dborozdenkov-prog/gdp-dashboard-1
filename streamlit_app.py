@@ -264,9 +264,9 @@ with tab1:
     # Stock ticker inputs
     col1, col2 = st.columns(2)
     with col1:
-        ticker1 = st.text_input('First Stock Ticker', 'TSLA')
+        ticker1 = st.text_input('First Stock Ticker', 'KO')
     with col2:
-        ticker2 = st.text_input('Second Stock Ticker', 'BYD')
+        ticker2 = st.text_input('Second Stock Ticker', 'PEP')
 
     tickers = [ticker1.upper(), ticker2.upper()]
 
@@ -278,7 +278,7 @@ with tab1:
         st.stop()
 
     # Date range selector
-    end_date = datetime.now().date()
+    end_date = datetime.now().date() + timedelta(days=1)
     start_date = end_date - timedelta(days=365)  # Default to last year
 
     col3, col4 = st.columns(2)
@@ -295,30 +295,30 @@ with tab1:
         st.header('Stock Prices Over Time', divider='gray')
         st.line_chart(stock_df)
 
-        # Calculate daily returns
-        returns_df = stock_df.pct_change().dropna()
+        # Calculate rolling mean and standard deviation for normalization
+        # Using a 20-period rolling window as an example, this can be adjusted.
+        window = 20
 
-        # Correlation analysis
-        st.header('Correlation Analysis', divider='gray')
+        # Create a copy to avoid SettingWithCopyWarning
+        close_prices_copy = close_prices.copy()
 
-        # Correlation coefficient
-        correlation = returns_df[ticker1.upper()].corr(returns_df[ticker2.upper()])
-        st.metric(label=f"Correlation Coefficient (Daily Returns) - {ticker1.upper()} vs {ticker2.upper()}", value=f"{correlation:.3f}")
+        # Calculate normalized prices for KO and PEP
+        close_prices_copy['KO_normalized'] = (close_prices_copy['KO'] - close_prices_copy['KO'].rolling(window=window).mean()) / close_prices_copy['KO'].rolling(window=window).std()
+        close_prices_copy['PEP_normalized'] = (close_prices_copy['PEP'] - close_prices_copy['PEP'].rolling(window=window).mean()) / close_prices_copy['PEP'].rolling(window=window).std()
 
-        # Scatter plot of returns
-        st.subheader(f'Scatter Plot of Daily Returns: {ticker1.upper()} vs {ticker2.upper()}')
-        fig = px.scatter(returns_df, x=ticker1.upper(), y=ticker2.upper(), 
-                         title=f'{ticker1.upper()} vs {ticker2.upper()} Daily Returns',
-                         labels={ticker1.upper(): f'{ticker1.upper()} Daily Return', ticker2.upper(): f'{ticker2.upper()} Daily Return'})
-        fig.add_trace(go.Scatter(x=[returns_df[ticker1.upper()].min(), returns_df[ticker1.upper()].max()], 
-                                 y=[returns_df[ticker1.upper()].min(), returns_df[ticker1.upper()].max()], 
-                                 mode='lines', name='45° Line', line=dict(dash='dash')))
-        st.plotly_chart(fig)
+        # Calculate the spread between the normalized prices
+        close_prices_copy['Spread'] = close_prices_copy['KO_normalized'] - close_prices_copy['PEP_normalized']
 
-        # Rolling correlation
-        st.subheader(f'Rolling Correlation (30-day window): {ticker1.upper()} vs {ticker2.upper()}')
-        rolling_corr = returns_df[ticker1.upper()].rolling(window=30).corr(returns_df[ticker2.upper()])
-        st.line_chart(rolling_corr)
+        close_prices = close_prices_copy.copy()
+
+        # Display normalized prices and spread
+        st.header('Normalized Prices and Spread', divider='gray')
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=close_prices.index, y=close_prices['KO_normalized'], mode='lines', name='KO Normalized'))
+        fig.add_trace(go.Scatter)(x=close_prices.index, y=close_prices['PEP_normalized'], mode='lines', name='PEP Normalized'))
+        fig.add_trace(go.Scatter(x=close_prices.index, y=close_prices['Spread'], mode='lines', name='Spread (KO - PEP)', line=dict(dash='dash')))
+        fig.update_layout(title='Normalized Prices and Spread', xaxis_title='Date', yaxis_title='Normalized Price / Spread', height=500)
+        st.plotly_chart(fig, use_container_width=True)
 
 with tab2:
     # Refresh button
