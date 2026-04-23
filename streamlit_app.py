@@ -43,7 +43,7 @@ def get_stock_data(tickers, start_date, end_date):
     for ticker in tickers:
         def fetch_ticker():
             stock = yf.Ticker(ticker)
-            hist = stock.history(start=start_date, end=end_date)
+            hist = stock.history(start=start_date, end=end_date, interval='1h')
             return hist['Close']
         
         try:
@@ -341,7 +341,7 @@ with tab2:
     # Date range selector for FX
     # Include today's data by setting end_date to tomorrow
     end_date_fx = datetime.now().date() + timedelta(days=1)
-    start_date_fx = end_date_fx - timedelta(days=31)  # Default to last 30 days for hourly data
+    start_date_fx = end_date_fx - timedelta(days=20)# Default to last 20 days for hourly data
 
     col5, col6 = st.columns(2)
     with col5:
@@ -361,9 +361,9 @@ with tab2:
         fig_fx.update_layout(height=400, xaxis_title='Date', yaxis_title='Price')
         st.plotly_chart(fig_fx)
 
-        # Display raw data preview
-        with st.expander("View Raw FX Data"):
-            st.dataframe(fx_df.head(50))
+        # Display raw data preview (latest 50 hourly rates including today)
+        with st.expander("View Raw FX Data (Latest 50 Hourly Rates)"):
+            st.dataframe(fx_df.tail(50))
 
         # Fourier Transform Analysis
         st.header('Fourier Transform Analysis', divider='gray')
