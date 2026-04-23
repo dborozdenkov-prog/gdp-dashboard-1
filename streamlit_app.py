@@ -7,6 +7,7 @@ import plotly.graph_objects as go
 import numpy as np
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
+import time
 
 # Set the title and favicon that appear in the Browser's tab bar.
 st.set_page_config(
@@ -14,10 +15,25 @@ st.set_page_config(
     page_icon='📈',  # Stock chart emoji
 )
 
+# Suppress harmless ScriptRunContext warnings
+import warnings
+warnings.filterwarnings("ignore", message=".*missing ScriptRunContext.*")
+
 # -----------------------------------------------------------------------------
 # Declare some useful functions.
 
-@st.cache_data(ttl=300)
+def retry_with_backoff(func, max_retries=3, base_delay=1):
+    """Retry a function with exponential backoff."""
+    for attempt in range(max_retries):
+        try:
+            return func()
+        except Exception as e:
+            if attempt == max_retries - 1:
+                raise
+            delay = base_delay * (2 ** attempt)
+            time.sleep(delay)
+
+@st.cache_data(ttl=600)
 def get_stock_data(tickers, start_date, end_date):
     """Grab stock data from Yahoo Finance.
 
@@ -25,14 +41,25 @@ def get_stock_data(tickers, start_date, end_date):
     """
     data = {}
     for ticker in tickers:
-        stock = yf.Ticker(ticker)
-        hist = stock.history(start=start_date, end=end_date)
-        data[ticker] = hist['Close']
+        def fetch_ticker():
+            stock = yf.Ticker(ticker)
+            hist = stock.history(start=start_date, end=end_date)
+            return hist['Close']
+        
+        try:
+            data[ticker] = retry_with_backoff(fetch_ticker)
+        except Exception as e:
+            st.warning(f"⚠️ Failed to fetch data for {ticker}: {str(e)[:100]}")
+            continue
+    
+    if not data:
+        raise ValueError("Failed to fetch any stock data")
+    
     df = pd.DataFrame(data)
     df.index = df.index.date  # Convert to date for easier handling
     return df
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=300)
 def get_fx_data(tickers, start_date, end_date):
     """Grab FX data from Yahoo Finance.
 
@@ -40,9 +67,20 @@ def get_fx_data(tickers, start_date, end_date):
     """
     data = {}
     for ticker in tickers:
-        stock = yf.Ticker(ticker)
-        hist = stock.history(start=start_date, end=end_date, interval='1h')
-        data[ticker] = hist['Close']
+        def fetch_fx():
+            stock = yf.Ticker(ticker)
+            hist = stock.history(start=start_date, end=end_date, interval='1h')
+            return hist['Close']
+        
+        try:
+            data[ticker] = retry_with_backoff(fetch_fx)
+        except Exception as e:
+            st.warning(f"⚠️ Failed to fetch data for {ticker}: {str(e)[:100]}")
+            continue
+    
+    if not data:
+        raise ValueError("Failed to fetch any FX data")
+    
     df = pd.DataFrame(data)
     return df
 
@@ -319,6 +357,10 @@ with tab2:
         fig_fx = px.line(fx_df, x=fx_df.index, y=fx_pair, title=f'{fx_pair} Prices Over Time')
         fig_fx.update_layout(height=400, xaxis_title='Date', yaxis_title='Price')
         st.plotly_chart(fig_fx)
+
+        # Display raw data preview
+        with st.expander("View Raw FX Data"):
+            st.dataframe(fx_df.head(50))
 
         # Fourier Transform Analysis
         st.header('Fourier Transform Analysis', divider='gray')
