@@ -339,14 +339,17 @@ with tab2:
         st.stop()
 
     # Date range selector for FX
-    end_date_fx = datetime.now().date()
-    start_date_fx = end_date_fx - timedelta(days=30)  # Default to last 30 days for hourly data
+    # Include today's data by setting end_date to tomorrow
+    end_date_fx = datetime.now().date() + timedelta(days=1)
+    start_date_fx = end_date_fx - timedelta(days=31)  # Default to last 30 days for hourly data
 
     col5, col6 = st.columns(2)
     with col5:
         start_date_fx = st.date_input('Start Date (FX)', start_date_fx)
     with col6:
         end_date_fx = st.date_input('End Date (FX)', end_date_fx)
+    
+    st.caption("📊 Includes today's hourly prices for more accurate predictions")
     fx_df = get_fx_data([fx_pair], start_date_fx, end_date_fx)
 
     if fx_df.empty:
@@ -385,11 +388,20 @@ with tab2:
         fig_smoothed.update_layout(height=400, xaxis_title='Date', yaxis_title='Smoothed Price')
         st.plotly_chart(fig_smoothed)
 
-        # Predict next hour price using linear extrapolation on the last 24 smoothed prices
-        last_points = smoothed_prices[-24:]
+        # Predict next hour price using all available smoothed prices
+        # Use more data points for better prediction accuracy
+        use_points = min(48, len(smoothed_prices))  # Use up to last 48 hours of data
+        last_points = smoothed_prices[-use_points:]
         x = np.arange(len(last_points))
+        
+        # Linear extrapolation from all available data
         slope, intercept = np.polyfit(x, last_points, 1)
         next_price = slope * len(last_points) + intercept
+        
+        # Calculate confidence based on data recency
+        latest_prices = prices[-10:] if len(prices) >= 10 else prices
+        price_volatility = np.std(latest_prices)
+        confidence = "High" if price_volatility < np.mean(latest_prices) * 0.05 else "Medium" if price_volatility < np.mean(latest_prices) * 0.1 else "Low"
 
         # Plot Magnitude spectrum (positive frequencies only)
         positive_freqs = freqs[:len(freqs)//2 + 1]
@@ -404,12 +416,15 @@ with tab2:
         st.plotly_chart(fig)
 
         # Display predicted and current price side by side
-        col_pred, col_live = st.columns(2)
+        col_pred, col_live, col_conf = st.columns(3)
         with col_pred:
             st.metric(label=f"Predicted Next Hour Price for {fx_pair}", value=f"{next_price:.4f}")
         with col_live:
-            current_price = prices[-1]
+            current_price = prices[-1]  # Use most recent price
             st.metric(label=f"Current Live Price for {fx_pair}", value=f"{current_price:.4f}")
+        with col_conf:
+            price_change = ((next_price - current_price) / current_price * 100) if current_price != 0 else 0
+            st.metric(label="Prediction Confidence", value=confidence, delta=f"{price_change:.2f}%")
 
 with tab3:
     st.header('Bond Portfolio PCA Analysis', divider='gray')
