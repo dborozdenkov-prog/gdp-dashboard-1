@@ -56,7 +56,6 @@ def get_stock_data(tickers, start_date, end_date):
         raise ValueError("Failed to fetch any stock data")
     
     df = pd.DataFrame(data)
-    df.index = df.index.date  # Convert to date for easier handling
     return df
 
 @st.cache_data(ttl=300)
@@ -291,6 +290,10 @@ with tab1:
     if stock_df.empty:
         st.error("No data available for the selected date range.")
     else:
+        # Display raw data preview (latest hourly rates including today)
+        with st.expander("View Raw Price Data (Latest 48 Hourly Rates)"):
+            st.dataframe(stock_df.tail(48))
+
         # Display stock prices over time
         st.header('Stock Prices Over Time', divider='gray')
         st.line_chart(stock_df)
@@ -300,25 +303,165 @@ with tab1:
         window = 20
 
         # Create a copy to avoid SettingWithCopyWarning
-        close_prices_copy = close_prices.copy()
+        close_prices_copy = stock_df.copy()
 
-        # Calculate normalized prices for KO and PEP
-        close_prices_copy['KO_normalized'] = (close_prices_copy['KO'] - close_prices_copy['KO'].rolling(window=window).mean()) / close_prices_copy['KO'].rolling(window=window).std()
-        close_prices_copy['PEP_normalized'] = (close_prices_copy['PEP'] - close_prices_copy['PEP'].rolling(window=window).mean()) / close_prices_copy['PEP'].rolling(window=window).std()
+        # Calculate normalized prices for both tickers dynamically
+        ticker1_norm = f'{ticker1.upper()}_normalized'
+        ticker2_norm = f'{ticker2.upper()}_normalized'
+        
+        close_prices_copy[ticker1_norm] = (close_prices_copy[ticker1.upper()] - close_prices_copy[ticker1.upper()].rolling(window=window).mean()) / close_prices_copy[ticker1.upper()].rolling(window=window).std()
+        close_prices_copy[ticker2_norm] = (close_prices_copy[ticker2.upper()] - close_prices_copy[ticker2.upper()].rolling(window=window).mean()) / close_prices_copy[ticker2.upper()].rolling(window=window).std()
 
         # Calculate the spread between the normalized prices
-        close_prices_copy['Spread'] = close_prices_copy['KO_normalized'] - close_prices_copy['PEP_normalized']
-
-        close_prices = close_prices_copy.copy()
+        close_prices_copy['Spread'] = close_prices_copy[ticker1_norm] - close_prices_copy[ticker2_norm]
 
         # Display normalized prices and spread
         st.header('Normalized Prices and Spread', divider='gray')
         fig = go.Figure()
-        fig.add_trace(go.Scatter(x=close_prices.index, y=close_prices['KO_normalized'], mode='lines', name='KO Normalized'))
-        fig.add_trace(go.Scatter)(x=close_prices.index, y=close_prices['PEP_normalized'], mode='lines', name='PEP Normalized'))
-        fig.add_trace(go.Scatter(x=close_prices.index, y=close_prices['Spread'], mode='lines', name='Spread (KO - PEP)', line=dict(dash='dash')))
+        fig.add_trace(go.Scatter(x=close_prices_copy.index, y=close_prices_copy[ticker1_norm], mode='lines', name=f'{ticker1.upper()} Normalized'))
+        fig.add_trace(go.Scatter(x=close_prices_copy.index, y=close_prices_copy[ticker2_norm], mode='lines', name=f'{ticker2.upper()} Normalized'))
+        fig.add_trace(go.Scatter(x=close_prices_copy.index, y=close_prices_copy['Spread'], mode='lines', name=f'Spread ({ticker1.upper()} - {ticker2.upper()})', line=dict(dash='dash')))
         fig.update_layout(title='Normalized Prices and Spread', xaxis_title='Date', yaxis_title='Normalized Price / Spread', height=500)
         st.plotly_chart(fig, use_container_width=True)
+
+        # Detailed Spread Analysis with Bollinger Bands
+        st.header(f'Spread Analysis: {ticker1.upper()} - {ticker2.upper()}', divider='gray')
+        
+        # Calculate Bollinger Bands for the spread
+        spread_mean = close_prices_copy['Spread'].rolling(window=20).mean()
+        spread_std = close_prices_copy['Spread'].rolling(window=20).std()
+        upper_band = spread_mean + (2 * spread_std)
+        lower_band = spread_mean - (2 * spread_std)
+        
+        # Create spread chart with Bollinger Bands
+        fig_spread = go.Figure()
+        fig_spread.add_trace(go.Scatter(x=close_prices_copy.index, y=upper_band, fill=None, mode='lines', line_color='rgba(255,0,0,0)', showlegend=False))
+        fig_spread.add_trace(go.Scatter(x=close_prices_copy.index, y=lower_band, fillcolor='rgba(0,100,200,0.2)', fill='tonexty', mode='lines', line_color='rgba(0,255,0,0)', name='Bollinger Band Region'))
+        fig_spread.add_trace(go.Scatter(x=close_prices_copy.index, y=close_prices_copy['Spread'], mode='lines', name='Spread', line=dict(color='blue', width=2)))
+        fig_spread.add_trace(go.Scatter(x=close_prices_copy.index, y=spread_mean, mode='lines', name='Mean', line=dict(color='gray', dash='dot')))
+        fig_spread.add_trace(go.Scatter(x=close_prices_copy.index, y=upper_band, mode='lines', name='Upper Band (+2σ)', line=dict(color='red', dash='dash')))
+        fig_spread.add_trace(go.Scatter(x=close_prices_copy.index, y=lower_band, mode='lines', name='Lower Band (-2σ)', line=dict(color='green', dash='dash')))
+        
+        fig_spread.update_layout(
+            title=f'Normalized Spread with Bollinger Bands (20-period, 2σ)',
+            xaxis_title='Date',
+            yaxis_title='Spread Value',
+            height=500,
+            hovermode='x unified'
+        )
+        st.plotly_chart(fig_spread, use_container_width=True)
+        
+        # Spread Statistics
+        st.subheader('Spread Statistics')
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric('Mean Spread', f"{close_prices_copy['Spread'].mean():.4f}")
+        with col2:
+            st.metric('Std Dev', f"{close_prices_copy['Spread'].std():.4f}")
+        with col3:
+            st.metric('Current Spread', f"{close_prices_copy['Spread'].iloc[-1]:.4f}")
+        with col4:
+            spread_zscore = (close_prices_copy['Spread'].iloc[-1] - close_prices_copy['Spread'].mean()) / close_prices_copy['Spread'].std()
+            st.metric('Z-Score', f"{spread_zscore:.2f}")
+        
+        # Spread Prediction using Fourier Transform
+        st.subheader('Spread Prediction (Fourier Transform Analysis)', divider='gray')
+        
+        spread_values = close_prices_copy['Spread'].dropna().values
+        
+        # Compute FFT
+        fft_spread = np.fft.fft(spread_values)
+        spread_freqs = np.fft.fftfreq(len(spread_values), d=1)
+        spread_magnitude = np.abs(fft_spread)
+        
+        # Denoise by filtering out high-frequency components
+        spread_threshold = np.percentile(spread_magnitude, 85)  # Keep top 15%
+        fft_spread_filtered = fft_spread.copy()
+        fft_spread_filtered[spread_magnitude < spread_threshold] = 0
+        smoothed_spread = np.fft.ifft(fft_spread_filtered).real
+        
+        # Predict next spread value using linear extrapolation on smoothed spread
+        use_points = min(48, len(smoothed_spread))  # Use last 48 periods
+        last_spread_points = smoothed_spread[-use_points:]
+        x_spread = np.arange(len(last_spread_points))
+        slope_spread, intercept_spread = np.polyfit(x_spread, last_spread_points, 1)
+        predicted_spread = slope_spread * len(last_spread_points) + intercept_spread
+        
+        # Calculate confidence based on signal-to-noise ratio
+        signal_power = np.sum(spread_magnitude[spread_magnitude >= spread_threshold])
+        noise_power = np.sum(spread_magnitude[spread_magnitude < spread_threshold])
+        snr = signal_power / (noise_power + 1e-10)
+        confidence_pct = min(100, (snr / (snr + 1)) * 100)
+        
+        current_spread = close_prices_copy['Spread'].iloc[-1]
+        spread_diff_pct = ((predicted_spread - current_spread) / abs(current_spread)) * 100 if current_spread != 0 else 0
+        
+        # Calculate timing information
+        current_time = datetime.now()
+        next_hour = current_time + timedelta(hours=1)
+        time_until_next = next_hour - current_time
+        minutes_left = int(time_until_next.total_seconds() // 60)
+        seconds_left = int(time_until_next.total_seconds() % 60)
+        
+        # Display prediction metrics
+        st.write("**Next Period Spread Prediction:**")
+        col_pred, col_curr, col_diff = st.columns(3)
+        with col_pred:
+            st.metric(
+                label='🎯 Predicted Spread',
+                value=f'{predicted_spread:.4f}',
+                delta=f'{spread_diff_pct:.2f}%'
+            )
+        with col_curr:
+            st.metric(
+                label='📊 Current Spread',
+                value=f'{current_spread:.4f}'
+            )
+        with col_diff:
+            confidence_color = "🟢" if confidence_pct > 70 else "🟡" if confidence_pct > 40 else "🔴"
+            st.metric(
+                label=f'{confidence_color} Prediction Confidence',
+                value=f'{confidence_pct:.1f}%',
+                delta=f'SNR: {snr:.2f}' if snr > 0 else 'Low Signal'
+            )
+        
+        # Display timing information
+        st.write("**Timing Information:**")
+        col_time1, col_time2, col_time3 = st.columns(3)
+        with col_time1:
+            st.metric(
+                label='⏰ Current Time',
+                value=current_time.strftime('%H:%M:%S'),
+                delta=current_time.strftime('%Y-%m-%d')
+            )
+        with col_time2:
+            st.metric(
+                label='⏱️ Next Period',
+                value=next_hour.strftime('%H:%M:%S'),
+                delta=next_hour.strftime('%Y-%m-%d')
+            )
+        with col_time3:
+            st.metric(
+                label='⌛ Time Until Next',
+                value=f'{minutes_left}m {seconds_left}s',
+                delta='Hourly update'
+            )
+        
+        # Display forecast chart
+        st.write("**Smoothed Spread Trend (Denoised via FFT):**")
+        forecast_df = pd.DataFrame({
+            'Period': range(len(smoothed_spread)),
+            'Smoothed Spread': smoothed_spread,
+            'Original Spread': spread_values
+        }, index=close_prices_copy.index[:len(spread_values)])
+        
+        fig_forecast = go.Figure()
+        fig_forecast.add_trace(go.Scatter(x=forecast_df.index, y=forecast_df['Original Spread'], mode='lines', name='Original Spread', line=dict(color='lightgray', dash='dot')))
+        fig_forecast.add_trace(go.Scatter(x=forecast_df.index, y=forecast_df['Smoothed Spread'], mode='lines', name='Smoothed Spread (FFT)', line=dict(color='blue', width=2)))
+        fig_forecast.add_hline(y=predicted_spread, line_dash='dash', line_color='green', annotation_text=f'Predicted: {predicted_spread:.4f}', annotation_position='right')
+        fig_forecast.add_hline(y=current_spread, line_dash='dash', line_color='red', annotation_text=f'Current: {current_spread:.4f}', annotation_position='right')
+        fig_forecast.update_layout(title='Spread Denoising & Prediction', xaxis_title='Date', yaxis_title='Spread', height=400)
+        st.plotly_chart(fig_forecast, use_container_width=True)
 
 with tab2:
     # Refresh button
@@ -425,6 +568,34 @@ with tab2:
         with col_conf:
             price_change = ((next_price - current_price) / current_price * 100) if current_price != 0 else 0
             st.metric(label="Prediction Confidence", value=confidence, delta=f"{price_change:.2f}%")
+        
+        # Display timing information
+        st.write("**Timing Information:**")
+        current_time_fx = datetime.now()
+        next_hour_fx = current_time_fx + timedelta(hours=1)
+        time_until_next_fx = next_hour_fx - current_time_fx
+        minutes_left_fx = int(time_until_next_fx.total_seconds() // 60)
+        seconds_left_fx = int(time_until_next_fx.total_seconds() % 60)
+        
+        col_time1, col_time2, col_time3 = st.columns(3)
+        with col_time1:
+            st.metric(
+                label='⏰ Current Time',
+                value=current_time_fx.strftime('%H:%M:%S'),
+                delta=current_time_fx.strftime('%Y-%m-%d')
+            )
+        with col_time2:
+            st.metric(
+                label='⏱️ Next Period',
+                value=next_hour_fx.strftime('%H:%M:%S'),
+                delta=next_hour_fx.strftime('%Y-%m-%d')
+            )
+        with col_time3:
+            st.metric(
+                label='⌛ Time Until Next',
+                value=f'{minutes_left_fx}m {seconds_left_fx}s',
+                delta='Hourly update'
+            )
 
 with tab3:
     st.header('Bond Portfolio PCA Analysis', divider='gray')
