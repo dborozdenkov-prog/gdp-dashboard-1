@@ -251,7 +251,7 @@ Stock and FX analysis with correlation and Fourier Transform.
 ''
 
 # Create tabs
-tab1, tab2, tab3 = st.tabs(["Stock Analytics", "FX Analytics", "Bond PCA Analysis"])
+tab1, tab2, tab3, tab4 = st.tabs(["Pair Stock Analytics", "FX Analytics", "Bond PCA Analysis", "Single Stock Analytics"])
 
 with tab1:
     # Refresh button
@@ -791,3 +791,122 @@ with tab3:
         st.write("- **Multi-Source**: Best for bonds listed on European/Asian exchanges (LSE, Deutsche Börse, Euronext, etc.)")
         st.write("- **Finnhub**: Requires free API key from https://finnhub.io")
         st.write("- **IEX Cloud**: Requires free API key from https://iexcloud.io")
+
+with tab4:
+    # Single stock analysis tab (mirrors Pair Stock Analytics logic for one ticker)
+    if st.button('🔄 Refresh Single Stock Data', key='single_stock_refresh'):
+        st.rerun()
+
+    st.divider()
+
+    # Single stock ticker input
+    ticker = st.text_input('Stock Ticker', 'AAPL', key='single_ticker')
+    ticker = ticker.upper().strip()
+
+    if not ticker:
+        st.error("Please enter a stock ticker.")
+        st.stop()
+
+    # Date range selector
+    end_date_single = datetime.now().date() + timedelta(days=1)
+    start_date_single = end_date_single - timedelta(days=365)
+
+    col5, col6 = st.columns(2)
+    with col5:
+        start_date_single = st.date_input('Start Date (Single)', start_date_single)
+    with col6:
+        end_date_single = st.date_input('End Date (Single)', end_date_single)
+
+    stock_df_single = get_stock_data([ticker], start_date_single, end_date_single)
+
+    if stock_df_single.empty:
+        st.error("No data available for the selected date range.")
+    else:
+        # Display raw data preview
+        with st.expander("View Raw Price Data (Latest 48 Hourly Rates)"):
+            st.dataframe(stock_df_single.tail(48))
+
+        # Price chart
+        st.header(f'{ticker} Price Over Time', divider='gray')
+        st.line_chart(stock_df_single)
+
+        # Normalized price (rolling window)
+        window = 20
+        df_copy = stock_df_single.copy()
+        norm_col = f'{ticker}_normalized'
+        df_copy[norm_col] = (df_copy[ticker] - df_copy[ticker].rolling(window=window).mean()) / df_copy[ticker].rolling(window=window).std()
+
+        st.header('Normalized Price', divider='gray')
+        fig_single = go.Figure()
+        fig_single.add_trace(go.Scatter(x=df_copy.index, y=df_copy[ticker], mode='lines', name=f'{ticker} Raw'))
+        fig_single.add_trace(go.Scatter(x=df_copy.index, y=df_copy[norm_col], mode='lines', name=f'{ticker} Normalized'))
+        fig_single.update_layout(title=f'{ticker} Price & Normalized', xaxis_title='Date', yaxis_title='Price / Normalized', height=500)
+        st.plotly_chart(fig_single, use_container_width=True)
+
+        # Fourier Transform smoothing and prediction (similar to FX tab)
+        prices = stock_df_single[ticker].values
+        fft = np.fft.fft(prices)
+        freqs = np.fft.fftfreq(len(prices), d=1)
+        magnitude = np.abs(fft)
+
+        # Denoise by keeping top components
+        threshold = np.percentile(magnitude, 85)
+        fft_filtered = fft.copy()
+        fft_filtered[magnitude < threshold] = 0
+        smoothed_prices = np.fft.ifft(fft_filtered).real
+
+        # Predict next period using linear extrapolation on smoothed series
+        use_points = min(48, len(smoothed_prices))
+        last_points = smoothed_prices[-use_points:]
+        x = np.arange(len(last_points))
+        slope, intercept = np.polyfit(x, last_points, 1)
+        next_price = slope * len(last_points) + intercept
+
+        # Confidence via SNR
+        signal_power = np.sum(magnitude[magnitude >= threshold])
+        noise_power = np.sum(magnitude[magnitude < threshold])
+        snr = signal_power / (noise_power + 1e-10)
+        confidence_pct = min(100, (snr / (snr + 1)) * 100)
+
+        current_price = prices[-1]
+        price_change_pct = ((next_price - current_price) / current_price * 100) if current_price != 0 else 0
+
+        colp, coll, colc = st.columns(3)
+        with colp:
+            st.metric(label=f'🎯 Predicted Next Price for {ticker}', value=f'{next_price:.4f}', delta=f'{price_change_pct:.2f}%')
+        with coll:
+            st.metric(label=f'📊 Current Price ({ticker})', value=f'{current_price:.4f}')
+        with colc:
+            conf_emoji = '🟢' if confidence_pct > 70 else '🟡' if confidence_pct > 40 else '🔴'
+            st.metric(label=f'{conf_emoji} Prediction Confidence', value=f'{confidence_pct:.1f}%', delta=f'SNR: {snr:.2f}' if snr > 0 else 'Low Signal')
+
+        # Smoothed price chart
+        st.subheader('Smoothed Price (Denoised via FFT)')
+        smoothed_df_single = pd.DataFrame({'Smoothed Price': smoothed_prices}, index=stock_df_single.index)
+        fig_sm = px.line(smoothed_df_single, x=smoothed_df_single.index, y='Smoothed Price', title='Smoothed Prices')
+        fig_sm.update_layout(height=400, xaxis_title='Date', yaxis_title='Smoothed Price')
+        st.plotly_chart(fig_sm, use_container_width=True)
+
+        # Magnitude spectrum
+        positive_freqs = freqs[:len(freqs)//2 + 1]
+        positive_magnitude = magnitude[:len(magnitude)//2 + 1]
+        power_spectrum_df = pd.DataFrame({'Frequency': positive_freqs, 'Magnitude': positive_magnitude})
+        fig_spec = px.line(power_spectrum_df, x='Frequency', y='Magnitude', title='Magnitude Spectrum')
+        fig_spec.update_yaxes(type='log')
+        fig_spec.update_layout(height=400, xaxis_title='Frequency (cycles per hour)', yaxis_title='Magnitude (log scale)')
+        st.plotly_chart(fig_spec, use_container_width=True)
+
+        # Timing information
+        current_time_single = datetime.now()
+        next_hour_single = current_time_single + timedelta(hours=1)
+        time_until_next_single = next_hour_single - current_time_single
+        minutes_left_single = int(time_until_next_single.total_seconds() // 60)
+        seconds_left_single = int(time_until_next_single.total_seconds() % 60)
+
+        ct1, ct2, ct3 = st.columns(3)
+        with ct1:
+            st.metric(label='⏰ Current Time', value=current_time_single.strftime('%H:%M:%S'), delta=current_time_single.strftime('%Y-%m-%d'))
+        with ct2:
+            st.metric(label='⏱️ Next Period', value=next_hour_single.strftime('%H:%M:%S'), delta=next_hour_single.strftime('%Y-%m-%d'))
+        with ct3:
+            st.metric(label='⌛ Time Until Next', value=f'{minutes_left_single}m {seconds_left_single}s', delta='Hourly update')
