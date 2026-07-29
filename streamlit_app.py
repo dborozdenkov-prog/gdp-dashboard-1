@@ -322,7 +322,7 @@ with tab1:
         fig.add_trace(go.Scatter(x=close_prices_copy.index, y=close_prices_copy[ticker2_norm], mode='lines', name=f'{ticker2.upper()} Normalized'))
         fig.add_trace(go.Scatter(x=close_prices_copy.index, y=close_prices_copy['Spread'], mode='lines', name=f'Spread ({ticker1.upper()} - {ticker2.upper()})', line=dict(dash='dash')))
         fig.update_layout(title='Normalized Prices and Spread', xaxis_title='Date', yaxis_title='Normalized Price / Spread', height=500)
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
         # Detailed Spread Analysis with Bollinger Bands
         st.header(f'Spread Analysis: {ticker1.upper()} - {ticker2.upper()}', divider='gray')
@@ -349,7 +349,7 @@ with tab1:
             height=500,
             hovermode='x unified'
         )
-        st.plotly_chart(fig_spread, use_container_width=True)
+        st.plotly_chart(fig_spread, width="stretch")
         
         # Spread Statistics
         st.subheader('Spread Statistics')
@@ -461,7 +461,7 @@ with tab1:
         fig_forecast.add_hline(y=predicted_spread, line_dash='dash', line_color='green', annotation_text=f'Predicted: {predicted_spread:.4f}', annotation_position='right')
         fig_forecast.add_hline(y=current_spread, line_dash='dash', line_color='red', annotation_text=f'Current: {current_spread:.4f}', annotation_position='right')
         fig_forecast.update_layout(title='Spread Denoising & Prediction', xaxis_title='Date', yaxis_title='Spread', height=400)
-        st.plotly_chart(fig_forecast, use_container_width=True)
+        st.plotly_chart(fig_forecast, width="stretch")
 
 with tab2:
     # Refresh button
@@ -658,7 +658,7 @@ with tab3:
         with col2:
             end_date_bond = st.date_input('End Date (Bonds)', datetime.now().date())
         
-        if st.button('Fetch Bond Prices and Run PCA', use_container_width=True):
+        if st.button('Fetch Bond Prices and Run PCA', width="stretch"):
             # Validate API key if needed
             if data_provider in ['Finnhub API', 'IEX Cloud API'] and not api_key:
                 st.error("Please provide an API key for the selected data provider.")
@@ -724,7 +724,7 @@ with tab3:
             fig_var = px.bar(var_df, x='Principal Component', y='Explained Variance', 
                             title='Explained Variance by Principal Component',
                             labels={'Explained Variance': 'Explained Variance (%)'})
-            st.plotly_chart(fig_var, use_container_width=True)
+            st.plotly_chart(fig_var, width="stretch")
             
             # Component loadings - which bonds drive which PCs
             st.subheader('Bond Contributions to Principal Components')
@@ -753,7 +753,7 @@ with tab3:
                                  title=f'Top 20 Bonds Contributing to {pc_selected}',
                                  color='Loading', color_continuous_scale='RdBu')
             fig_loadings.update_layout(height=500)
-            st.plotly_chart(fig_loadings, use_container_width=True)
+            st.plotly_chart(fig_loadings, width="stretch")
             
             # 2D PCA scatter
             st.subheader('2D PCA Space (PC1 vs PC2)')
@@ -768,7 +768,7 @@ with tab3:
                                labels={'PC1': f'PC1 ({explained_var[0]*100:.1f}%)', 
                                       'PC2': f'PC2 ({explained_var[1]*100:.1f}%)'})
             fig_2d.update_traces(marker=dict(size=4, opacity=0.6))
-            st.plotly_chart(fig_2d, use_container_width=True)
+            st.plotly_chart(fig_2d, width="stretch")
             
             # Correlation heatmap of top bonds
             st.subheader('Correlation Matrix of Top 10 Contributing Bonds')
@@ -779,7 +779,7 @@ with tab3:
                                 title='Correlation Matrix - Top 10 Bonds',
                                 color_continuous_scale='RdBu', zmin=-1, zmax=1)
             fig_corr.update_layout(height=600)
-            st.plotly_chart(fig_corr, use_container_width=True)
+            st.plotly_chart(fig_corr, width="stretch")
     else:
         st.info("📋 Please upload a CSV file with ISINs or paste them directly to begin the analysis.")
         st.write("**How to use:**")
@@ -841,7 +841,7 @@ with tab4:
         fig_single.add_trace(go.Scatter(x=df_copy.index, y=df_copy[ticker], mode='lines', name=f'{ticker} Raw'))
         fig_single.add_trace(go.Scatter(x=df_copy.index, y=df_copy[norm_col], mode='lines', name=f'{ticker} Normalized'))
         fig_single.update_layout(title=f'{ticker} Price & Normalized', xaxis_title='Date', yaxis_title='Price / Normalized', height=500)
-        st.plotly_chart(fig_single, use_container_width=True)
+        st.plotly_chart(fig_single, width="stretch")
 
         # Fourier Transform smoothing and prediction (similar to FX tab)
         prices = stock_df_single[ticker].values
@@ -885,7 +885,7 @@ with tab4:
         smoothed_df_single = pd.DataFrame({'Smoothed Price': smoothed_prices}, index=stock_df_single.index)
         fig_sm = px.line(smoothed_df_single, x=smoothed_df_single.index, y='Smoothed Price', title='Smoothed Prices')
         fig_sm.update_layout(height=400, xaxis_title='Date', yaxis_title='Smoothed Price')
-        st.plotly_chart(fig_sm, use_container_width=True)
+        st.plotly_chart(fig_sm, width="stretch")
 
         # Magnitude spectrum
         positive_freqs = freqs[:len(freqs)//2 + 1]
@@ -894,7 +894,7 @@ with tab4:
         fig_spec = px.line(power_spectrum_df, x='Frequency', y='Magnitude', title='Magnitude Spectrum')
         fig_spec.update_yaxes(type='log')
         fig_spec.update_layout(height=400, xaxis_title='Frequency (cycles per hour)', yaxis_title='Magnitude (log scale)')
-        st.plotly_chart(fig_spec, use_container_width=True)
+        st.plotly_chart(fig_spec, width="stretch")
 
         # Timing information
         current_time_single = datetime.now()
